@@ -26,22 +26,19 @@ app.use(function (req, res, next) {
     next();
 });
 
-app.get('/api/drive', async (req, res) => {
+// liste les dossiers et fichiers à la racine du "drive"
+app.get('/api/drive', async (req, res) => { // défini la route
     try {
-        await getFilesRoot(res)
-    } catch (e) {
-        res.status(404)
+        const files = await promises.readdir(join(rootProject), { withFileTypes: true }); // Lire le contenu du répertoire racine
+        const fileInfo = files.map(file => ({  // Créer un tableau d'objets des infos sur chaque fichier
+            name: file.name,
+            isFolder: file.isDirectory()
+        }));
+        res.send(fileInfo); // Retourne la liste des infos fichiers au client
+    } catch (e) { // Si échec, retourne l'erreur
+        res.status(404).send("Une erreur s'est produite lors de la récupération des fichiers");
     }
-})
-
-async function getFilesRoot  (res){
-const files = await promises.readdir(join(rootProject), {withFileTypes: true})
-const fileInfo = files.map(file =>({
-    name : file.name,
-    isFolder : file.isDirectory()
-}))
-res.send(fileInfo)
-}
+});
 
 
 
