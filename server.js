@@ -19,6 +19,7 @@ function start() {
         console.log("serveur est en ligne !");
     })
 }
+// Middleware pour autoriser les requêtes CORS
 app.use(function (req, res, next) {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader('Access-Control-Allow-Methods', '*');
@@ -40,6 +41,21 @@ app.get('/api/drive', async (req, res) => { // défini la route
     }
 });
 
+// Route pour créer un dossier avec un nom spécifique
+app.post('/api/drive', async (req, res) => {
+    try {
+        const { name } = req.query; // Récupère le nom du dossier à partir des paramètres de requête
+        if (!name || !/^[a-zA-Z0-9_-]+$/.test(name)) {
+            return res.status(400).send("Le nom du dossier est requis et ne doit contenir que des caractères alphanumériques, tirets et tirets bas.");
+        }
+        const folderPath = join(rootProject, name); // Crée le chemin complet du dossier avec le nom fourni
+        await promises.mkdir(folderPath, { recursive: true }); // Crée le dossier de manière récursive si nécessaire
+        res.sendStatus(201); // Envoie une réponse indiquant que le dossier a été créé avec succès
+    } catch (error) {
+        console.error("Erreur lors de la création du dossier :", error);
+        res.status(500).send("Une erreur s'est produite lors de la création du dossier.");
+    }
+});
 
 
 module.exports = start; // pour exporter la fonction start
