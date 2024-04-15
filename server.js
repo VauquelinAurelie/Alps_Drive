@@ -53,11 +53,8 @@ app.get('/api/drive', getDriveFiles);
 app.get('/api/drive/:filename', async (req, res) => {
     try {
         const { filename } = req.params; // Récupère le nom du dossier à partir des paramètres de URL
-        console.log (filename);
         const filePath = join(rootProject, filename);
-        console.log (filePath);
         const fileContent = await promises.readFile(filePath, 'utf-8');
-        console.log (fileContent);
 
         // envoie le contenu du fichier en réponse
         res.sendFile(filePath);
