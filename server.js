@@ -6,7 +6,7 @@ const { join } = require("node:path")
 const { promises } = require("node:fs")
 const { tmpdir } = require("node:os");
 const path = require("node:path");
-const { log } = require("node:console");
+const { log, error } = require("node:console");
 
 
 const rootProject = join(tmpdir(), 'api', 'drive')
@@ -79,7 +79,8 @@ app.get('/api/drive/:filename', async (req, res) => {
 });
 
 
-// fonction avec la route pour créer un dossier avec un nom spécifique
+// fonction pour créer un dossier avec un nom spécifique soit à la racine soit dans le dossier courant
+
 async function createFolder(req, res) {
     try {
         const { name } = req.query; // Récupère le nom du dossier à partir des paramètres de requête
@@ -103,6 +104,27 @@ async function createFolder(req, res) {
 
 // Route pour créer un dossier à la racine ou dans un dossier spécifique
 app.post('/api/drive/:folder?',createFolder); 
+
+
+// fonction de suppression d'un dossier ou d'un fichier avec le name et en fonction de son emplacement
+
+async function deleteFileOrFolder(req, res) {
+    try {
+        const { folder, name } = req.params;
+        let filePath = path.join(rootProject, name);
+        
+        if (folder) {
+            filePath = path.join(rootProject, folder, name);
+        }
+        
+        await promises.rm(filePath, { recursive: true }); // Supprime le fichier ou le dossier de manière récursive si nécessaire
+        res.sendStatus(200); // Envoie un status indiquant que le fichier ou le dossier a été supprimé avec succès
+    } catch (error) {
+        console.error("Erreur lors de la suppression :", error);
+        res.status(404).send("Le dossier ou le fichier n'existe pas ou n'a pas pu être supprimé.");
+    }
+}
+app.delete('/api/drive/:folder?/:name', deleteFileOrFolder);
 
 
 module.exports = start; // pour exporter la fonction start
