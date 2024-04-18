@@ -1,15 +1,17 @@
 const express = require("express")
 const morgan = require('morgan')
+const busboy = require('express-busboy')
 const port = process.env.PORT || 3000
 const app = express();
 const { join } = require("node:path")
+const fs = require("node:fs")
 const { promises } = require("node:fs")
 const { tmpdir } = require("node:os");
 const path = require("node:path");
 const { log, error } = require("node:console");
 
-
 const rootProject = join(tmpdir(), 'api', 'drive')
+const drivePath = "/api/drive/:name(*)"
 
 //demarrer le server
 function start() {
@@ -22,32 +24,41 @@ function start() {
     })
 }
 
-// Middleware pour autoriser les requêtes CORS
-app.use(function (req, res, next) {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader('Access-Control-Allow-Methods', '*');
-    res.setHeader("Access-Control-Allow-Headers", "*");
-    next();
-});
+    // Middleware pour autoriser les requêtes CORS
+    app.use(function (req, res, next) {
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader('Access-Control-Allow-Methods', '*');
+        res.setHeader("Access-Control-Allow-Headers", "*");
+        res.setHeader("Cache-Control", "no-store")
+        next();
+    });
 
-app.use(express.static(rootProject));
+    app.use(express.static(rootProject));
+
+    // busboy pour téléchargement de fichier
+    busboy.extend(app, {
+        upload: true,
+        path: "/tmp/busboy"
+    });
 
 // Fonction qui liste les dossiers et fichiers à la racine du "drive"
 async function getDriveFiles(req, res) {
+    const fullPath = join(rootProject, req.params.name)
+
     try {
-        const files = await promises.readdir(rootProject, { withFileTypes: true });
+        const files = await promises.readdir(fullPath, { withFileTypes: true });
         const fileInfo = files.map(file => ({
             name: file.name,
             isFolder: file.isDirectory()
         }));
-        res.status(200).send(fileInfo);
+        return res.status(200).send(fileInfo);
     } catch (error) {
         console.error("Erreur lors de la récupération des fichiers à la racine du drive :", error);
-        res.status(404).send("Une erreur s'est produite lors de la récupération des fichiers");
+        res.status(500).send("Une erreur s'est produite lors de la récupération des fichiers");
     }
 }
 // Route pour récupérer la liste des fichiers et dossiers à la racine du "drive"
-app.get('/api/drive', getDriveFiles);
+app.get(drivePath, getDriveFiles);
 
 
 // Route pour afficher le contenu d'un fichier
@@ -82,19 +93,14 @@ app.get('/api/drive/:filename', async (req, res) => {
 // fonction pour créer un dossier avec un nom spécifique soit à la racine soit dans le dossier courant
 
 async function createFolder(req, res) {
+    const fullPath = join(rootProject, req.params.name, req.query.name)
+
     try {
         const { name } = req.query; // Récupère le nom du dossier à partir des paramètres de requête
         if (!name || !/^[a-zA-Z0-9_-]+$/.test(name)) {
             return res.status(400).send("Le nom du dossier est requis et ne doit contenir que des caractères alphanumériques, tirets et tirets bas.");
         }
-        let folderPath = rootProject;
-
-        if (req.params.folder) { // S'il y a un dossier spécifique, créez le dossier à l'intérieur
-            folderPath = join(rootProject, req.params.folder, name);
-        } else { // Sinon, créez le dossier à la racine
-            folderPath = join(rootProject, name);
-        }
-        await promises.mkdir(folderPath, { recursive: true }); // Crée le dossier de manière récursive si nécessaire
+        await promises.mkdir(fullPath, { recursive: true }); // Crée le dossier de manière récursive si nécessaire
         res.sendStatus(201); // Envoie un status indiquant que le dossier a été créé avec succès
     } catch (error) {
         console.error("Erreur lors de la création du dossier :", error);
@@ -103,7 +109,7 @@ async function createFolder(req, res) {
 }
 
 // Route pour créer un dossier à la racine ou dans un dossier spécifique
-app.post('/api/drive/:folder?',createFolder); 
+app.post(drivePath,createFolder); 
 
 
 // fonction de suppression d'un dossier ou d'un fichier avec le name et en fonction de son emplacement
@@ -124,7 +130,30 @@ async function deleteFileOrFolder(req, res) {
         res.status(404).send("Le dossier ou le fichier n'existe pas ou n'a pas pu être supprimé.");
     }
 }
-app.delete('/api/drive/:folder?/:name', deleteFileOrFolder);
 
+// Route pour supprimer un fichier ou un dossier selon l'emplacement
+app.delete(drivePath, deleteFileOrFolder);
+
+
+// fonction création d'un fichier à la racine 
+
+async function uploadFile(req, res) {
+    // chemin du fichier qui se trouve dans le dossier tmp busboy
+    const tmpBusboyFilePath = req.files.file.file
+    const filename = req.files.file.filename
+    const fullPath = join(rootProject, req.params.name, filename)
+
+    try {
+        await promises.rename(tmpBusboyFilePath, fullPath);
+
+        res.sendStatus(201); // Envoie un statut indiquant que le fichier a été créé avec succès
+    } catch (error) {
+        console.error("Erreur lors de la création du fichier :", error);
+        res.status(500).send("Une erreur s'est produite lors de la création du fichier.");
+    }
+}
+
+// Route pour créer un fichier à la racine du "drive" 
+app.put(drivePath, uploadFile);
 
 module.exports = start; // pour exporter la fonction start
